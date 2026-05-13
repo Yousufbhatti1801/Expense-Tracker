@@ -1,0 +1,18 @@
+{% extends 'base.html' %}
+
+{% block title %}Spendly — Track your spending{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/landing.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="hero">
+    <h1 class="hero-title">Track your spending, effortlessly.</h1>
+    <p class="hero-subtitle">Spendly helps you stay on top of your expenses — simple, fast, and private.</p>
+    <div class="hero-actions">
+        <a href="{{ url_for('register') }}" class="btn btn-primary">Get started</a>
+        <a href="{{ url_for('login') }}" class="btn btn-primary">Sign in</a>
+    </div>
+</div>
+{% endblock %}
