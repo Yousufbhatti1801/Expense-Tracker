@@ -5,3 +5,11 @@ dist/
 *.log
 coverage/
 
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# SQLite database
+*.db
+
