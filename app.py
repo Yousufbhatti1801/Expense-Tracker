@@ -1,9 +1,19 @@
+import functools
 from flask import Flask, render_template, redirect, url_for, request, session, flash
 from werkzeug.security import generate_password_hash, check_password_hash
 from database.db import init_db, seed_db, get_user_by_email, create_user
 
 app = Flask(__name__)
 app.secret_key = 'dev-secret-key'  # TODO: load from env var in production
+
+
+def login_required(f):
+    @functools.wraps(f)
+    def wrapper(*args, **kwargs):
+        if not session.get('user_id'):
+            return redirect(url_for('login'))
+        return f(*args, **kwargs)
+    return wrapper
 
 
 @app.route('/')
@@ -50,9 +60,16 @@ def login():
             return render_template('login.html')
 
         session['user_id'] = user['id']
+        session['user_name'] = user['name']
         return redirect(url_for('landing'))
 
     return render_template('login.html')
+
+
+@app.route('/logout')
+def logout():
+    session.clear()
+    return redirect(url_for('landing'))
 
 
 if __name__ == '__main__':

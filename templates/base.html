@@ -11,8 +11,13 @@
     <nav class="nav">
         <a class="nav-brand" href="{{ url_for('landing') }}">Spendly</a>
         <div class="nav-links">
-            <a href="{{ url_for('register') }}">Register</a>
-            <a href="{{ url_for('login') }}">Sign in</a>
+            {% if session.get('user_id') %}
+                <span class="nav-greeting">Hi, {{ session['user_name'] }}</span>
+                <a href="{{ url_for('logout') }}">Logout</a>
+            {% else %}
+                <a href="{{ url_for('register') }}">Register</a>
+                <a href="{{ url_for('login') }}">Sign in</a>
+            {% endif %}
         </div>
     </nav>
 
