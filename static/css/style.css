@@ -62,6 +62,11 @@ body {
     color: var(--color-primary);
 }
 
+.nav-greeting {
+    color: var(--color-text-secondary);
+    font-size: 0.9rem;
+}
+
 /* Flash messages */
 .flash-messages {
     max-width: 480px;
