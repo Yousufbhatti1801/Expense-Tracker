@@ -11,7 +11,7 @@
 
     <div class="dashboard-header">
         <h1>Welcome, {{ session['user_name'] }}</h1>
-        <a href="/expenses/add" class="btn btn-primary">+ Add Expense</a>
+        <a href="{{ url_for('add_expense_view') }}" class="btn btn-primary">+ Add Expense</a>
     </div>
 
     <div class="summary-grid">
@@ -64,7 +64,7 @@
     {% else %}
     <div class="empty-state">
         <p>No expenses yet.</p>
-        <a href="/expenses/add" class="btn btn-primary">Add your first expense</a>
+        <a href="{{ url_for('add_expense_view') }}" class="btn btn-primary">Add your first expense</a>
     </div>
     {% endif %}
 

@@ -109,3 +109,15 @@ def get_expense_summary(user_id):
     ).fetchall()
     conn.close()
     return {'total': total, 'by_category': by_category}
+
+
+def add_expense(user_id, amount, category, date, description):
+    conn = get_db()
+    cursor = conn.execute(
+        'INSERT INTO expenses (user_id, amount, category, date, description) VALUES (?, ?, ?, ?, ?)',
+        (user_id, amount, category, date, description)
+    )
+    conn.commit()
+    new_id = cursor.lastrowid
+    conn.close()
+    return new_id
