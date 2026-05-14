@@ -1,8 +1,8 @@
 import functools
 from datetime import datetime
-from flask import Flask, render_template, redirect, url_for, request, session, flash, jsonify
+from flask import Flask, render_template, redirect, url_for, request, session, flash, jsonify, abort
 from werkzeug.security import generate_password_hash, check_password_hash
-from database.db import init_db, seed_db, get_user_by_email, create_user, get_expenses_by_user, get_expense_summary, add_expense, delete_expense, get_category_summary_by_range, get_period_summary_by_range
+from database.db import init_db, seed_db, get_user_by_email, create_user, get_expenses_by_user, get_expense_summary, add_expense, delete_expense, get_category_summary_by_range, get_period_summary_by_range, get_expense_by_id, update_expense
 
 app = Flask(__name__)
 app.secret_key = 'dev-secret-key'  # TODO: load from env var in production
@@ -138,6 +138,67 @@ def delete_expense_view(expense_id):
     else:
         flash('Expense deleted.', 'success')
     return redirect(url_for('dashboard'))
+
+
+@app.route('/expenses/<int:expense_id>/edit', methods=['GET', 'POST'])
+@login_required
+def edit_expense_view(expense_id):
+    user_id = session['user_id']
+    expense = get_expense_by_id(expense_id, user_id)
+    if expense is None:
+        abort(404)
+
+    if request.method == 'POST':
+        errors = {}
+        raw_amount  = request.form.get('amount', '').strip()
+        category    = request.form.get('category', '').strip()
+        date_str    = request.form.get('date', '').strip()
+        description = request.form.get('description', '').strip() or None
+
+        amount = None
+        if not raw_amount:
+            errors['amount'] = 'Amount is required.'
+        else:
+            try:
+                amount = float(raw_amount)
+                if amount <= 0:
+                    errors['amount'] = 'Amount must be greater than zero.'
+            except ValueError:
+                errors['amount'] = 'Amount must be a valid number.'
+
+        if category not in EXPENSE_CATEGORIES:
+            errors['category'] = 'Please select a valid category.'
+
+        if not date_str:
+            errors['date'] = 'Date is required.'
+        else:
+            try:
+                parsed_date = datetime.strptime(date_str, '%Y-%m-%d').date()
+                if parsed_date > datetime.today().date():
+                    errors['date'] = 'Date cannot be in the future.'
+            except ValueError:
+                errors['date'] = 'Date must be in YYYY-MM-DD format.'
+
+        if errors:
+            return render_template(
+                'edit_expense.html',
+                expense=expense,
+                categories=EXPENSE_CATEGORIES,
+                errors=errors,
+                form=request.form
+            )
+
+        update_expense(expense_id, user_id, amount, category, date_str, description)
+        flash('Expense updated.', 'success')
+        return redirect(url_for('dashboard'))
+
+    return render_template(
+        'edit_expense.html',
+        expense=expense,
+        categories=EXPENSE_CATEGORIES,
+        errors={},
+        form=dict(expense)
+    )
 
 
 @app.route('/api/expenses/summary')
