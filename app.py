@@ -1,8 +1,8 @@
 import functools
 from datetime import datetime
-from flask import Flask, render_template, redirect, url_for, request, session, flash
+from flask import Flask, render_template, redirect, url_for, request, session, flash, jsonify
 from werkzeug.security import generate_password_hash, check_password_hash
-from database.db import init_db, seed_db, get_user_by_email, create_user, get_expenses_by_user, get_expense_summary, add_expense, delete_expense
+from database.db import init_db, seed_db, get_user_by_email, create_user, get_expenses_by_user, get_expense_summary, add_expense, delete_expense, get_category_summary_by_range, get_period_summary_by_range
 
 app = Flask(__name__)
 app.secret_key = 'dev-secret-key'  # TODO: load from env var in production
@@ -138,6 +138,23 @@ def delete_expense_view(expense_id):
     else:
         flash('Expense deleted.', 'success')
     return redirect(url_for('dashboard'))
+
+
+@app.route('/api/expenses/summary')
+@login_required
+def expenses_summary_api():
+    VALID_RANGES = {'yesterday', 'weekly', '1month', '6months'}
+    range_filter = request.args.get('range', '6months')
+    if range_filter not in VALID_RANGES:
+        range_filter = '6months'
+    user_id = session['user_id']
+    by_category = get_category_summary_by_range(user_id, range_filter)
+    by_period = get_period_summary_by_range(user_id, range_filter)
+    return jsonify({
+        'selected_range': range_filter,
+        'by_category': by_category,
+        'by_period': by_period,
+    })
 
 
 @app.route('/logout')

@@ -34,6 +34,30 @@
         </div>
     </div>
 
+    <section class="dashboard-charts">
+        <div class="charts-header">
+            <h2>Spending Insights</h2>
+            <select id="chart-range-filter">
+                <option value="6months">Last 6 months</option>
+                <option value="1month">Last 1 month</option>
+                <option value="weekly">Last 7 days</option>
+                <option value="yesterday">Yesterday</option>
+            </select>
+        </div>
+        <div class="charts-grid">
+            <div class="chart-card">
+                <h3>Spending by Category</h3>
+                <canvas id="category-chart"></canvas>
+                <p class="chart-empty-state" id="category-empty-state">No data yet</p>
+            </div>
+            <div class="chart-card">
+                <h3>Spending Over Time</h3>
+                <canvas id="period-chart"></canvas>
+                <p class="chart-empty-state" id="period-empty-state">No data yet</p>
+            </div>
+        </div>
+    </section>
+
     <p class="section-title">All Expenses</p>
 
     {% if expenses %}
@@ -73,4 +97,88 @@
     {% endif %}
 
 </div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+<script>
+    const cssVars = getComputedStyle(document.documentElement);
+    const CHART_COLORS = [
+        cssVars.getPropertyValue('--color-primary').trim(),
+        cssVars.getPropertyValue('--color-success').trim(),
+        cssVars.getPropertyValue('--color-danger').trim(),
+        '#f59e0b',
+        '#8b5cf6',
+        '#06b6d4',
+        '#ec4899',
+    ];
+
+    let categoryChart = null;
+    let periodChart = null;
+
+    function renderCharts(data) {
+        const catCanvas = document.getElementById('category-chart');
+        const catEmpty = document.getElementById('category-empty-state');
+        if (categoryChart) { categoryChart.destroy(); categoryChart = null; }
+
+        if (!data.by_category.length) {
+            catCanvas.style.display = 'none';
+            catEmpty.style.display = 'block';
+        } else {
+            catCanvas.style.display = 'block';
+            catEmpty.style.display = 'none';
+            categoryChart = new Chart(catCanvas, {
+                type: 'doughnut',
+                data: {
+                    labels: data.by_category.map(r => r.category),
+                    datasets: [{
+                        data: data.by_category.map(r => r.total),
+                        backgroundColor: CHART_COLORS,
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: { legend: { position: 'bottom' } }
+                }
+            });
+        }
+
+        const perCanvas = document.getElementById('period-chart');
+        const perEmpty = document.getElementById('period-empty-state');
+        if (periodChart) { periodChart.destroy(); periodChart = null; }
+
+        const hasData = data.by_period.some(r => r.total > 0);
+        if (!hasData) {
+            perCanvas.style.display = 'none';
+            perEmpty.style.display = 'block';
+        } else {
+            perCanvas.style.display = 'block';
+            perEmpty.style.display = 'none';
+            periodChart = new Chart(perCanvas, {
+                type: 'bar',
+                data: {
+                    labels: data.by_period.map(r => r.label),
+                    datasets: [{
+                        label: 'Spending (Rs)',
+                        data: data.by_period.map(r => r.total),
+                        backgroundColor: cssVars.getPropertyValue('--color-primary').trim(),
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    scales: { y: { beginAtZero: true } }
+                }
+            });
+        }
+    }
+
+    function fetchAndRender(range) {
+        fetch('/api/expenses/summary?range=' + encodeURIComponent(range))
+            .then(r => r.json())
+            .then(renderCharts);
+    }
+
+    document.getElementById('chart-range-filter')
+        .addEventListener('change', function(e) { fetchAndRender(e.target.value); });
+
+    fetchAndRender('6months');
+</script>
 {% endblock %}

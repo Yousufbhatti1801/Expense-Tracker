@@ -1,5 +1,6 @@
 import sqlite3
 import os
+from datetime import date, timedelta
 from werkzeug.security import generate_password_hash
 
 DB_PATH = os.path.join(os.path.dirname(__file__), '..', 'spendly.db')
@@ -132,3 +133,82 @@ def delete_expense(expense_id, user_id):
     conn.commit()
     conn.close()
     return cursor.rowcount > 0
+
+
+def get_category_summary_by_range(user_id, range_filter):
+    today = date.today()
+    if range_filter == 'yesterday':
+        start = (today - timedelta(days=1)).isoformat()
+        conn = get_db()
+        rows = conn.execute(
+            'SELECT category, COALESCE(SUM(amount), 0) AS total '
+            'FROM expenses WHERE user_id = ? AND date = ? '
+            'GROUP BY category ORDER BY total DESC',
+            (user_id, start)
+        ).fetchall()
+    else:
+        if range_filter == 'weekly':
+            start = (today - timedelta(days=6)).isoformat()
+        elif range_filter == '1month':
+            start = (today - timedelta(days=29)).isoformat()
+        else:  # 6months
+            year = today.year
+            month = today.month - 5
+            if month <= 0:
+                month += 12
+                year -= 1
+            start = date(year, month, 1).isoformat()
+        conn = get_db()
+        rows = conn.execute(
+            'SELECT category, COALESCE(SUM(amount), 0) AS total '
+            'FROM expenses WHERE user_id = ? AND date >= ? '
+            'GROUP BY category ORDER BY total DESC',
+            (user_id, start)
+        ).fetchall()
+    conn.close()
+    return [{'category': r['category'], 'total': r['total']} for r in rows]
+
+
+def get_period_summary_by_range(user_id, range_filter):
+    today = date.today()
+
+    if range_filter == 'yesterday':
+        labels = [(today - timedelta(days=1)).isoformat()]
+        group_expr = "strftime('%Y-%m-%d', date)"
+        param = (today - timedelta(days=1)).isoformat()
+        date_clause = 'date = ?'
+    elif range_filter == 'weekly':
+        labels = [(today - timedelta(days=i)).isoformat() for i in range(6, -1, -1)]
+        group_expr = "strftime('%Y-%m-%d', date)"
+        param = (today - timedelta(days=6)).isoformat()
+        date_clause = 'date >= ?'
+    elif range_filter == '1month':
+        labels = [(today - timedelta(days=i)).isoformat() for i in range(29, -1, -1)]
+        group_expr = "strftime('%Y-%m-%d', date)"
+        param = (today - timedelta(days=29)).isoformat()
+        date_clause = 'date >= ?'
+    else:  # 6months
+        month_labels = []
+        y, m = today.year, today.month
+        for _ in range(6):
+            month_labels.append(f'{y:04d}-{m:02d}')
+            m -= 1
+            if m == 0:
+                m = 12
+                y -= 1
+        labels = list(reversed(month_labels))
+        group_expr = "strftime('%Y-%m', date)"
+        param = date(int(labels[0][:4]), int(labels[0][5:7]), 1).isoformat()
+        date_clause = 'date >= ?'
+
+    conn = get_db()
+    rows = conn.execute(
+        f'SELECT {group_expr} AS label, COALESCE(SUM(amount), 0) AS total '
+        f'FROM expenses WHERE user_id = ? AND {date_clause} '
+        f'GROUP BY label ORDER BY label ASC',
+        (user_id, param)
+    ).fetchall()
+    conn.close()
+
+    db_map = {r['label']: r['total'] for r in rows}
+    return [{'label': lbl, 'total': db_map.get(lbl, 0)} for lbl in labels]
