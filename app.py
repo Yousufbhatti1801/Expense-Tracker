@@ -10,7 +10,7 @@ app.secret_key = 'dev-secret-key'  # TODO: load from env var in production
 
 @app.template_filter('currency')
 def currency_filter(value):
-    return f'£{value:,.2f}'
+    return f'Rs {value:,.2f}'
 
 
 def login_required(f):
