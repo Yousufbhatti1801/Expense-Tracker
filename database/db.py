@@ -121,3 +121,14 @@ def add_expense(user_id, amount, category, date, description):
     new_id = cursor.lastrowid
     conn.close()
     return new_id
+
+
+def delete_expense(expense_id, user_id):
+    conn = get_db()
+    cursor = conn.execute(
+        'DELETE FROM expenses WHERE id = ? AND user_id = ?',
+        (expense_id, user_id)
+    )
+    conn.commit()
+    conn.close()
+    return cursor.rowcount > 0

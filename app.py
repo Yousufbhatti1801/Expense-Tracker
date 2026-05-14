@@ -2,7 +2,7 @@ import functools
 from datetime import datetime
 from flask import Flask, render_template, redirect, url_for, request, session, flash
 from werkzeug.security import generate_password_hash, check_password_hash
-from database.db import init_db, seed_db, get_user_by_email, create_user, get_expenses_by_user, get_expense_summary, add_expense
+from database.db import init_db, seed_db, get_user_by_email, create_user, get_expenses_by_user, get_expense_summary, add_expense, delete_expense
 
 app = Flask(__name__)
 app.secret_key = 'dev-secret-key'  # TODO: load from env var in production
@@ -127,6 +127,17 @@ def add_expense_view():
         return render_template('add_expense.html', categories=EXPENSE_CATEGORIES, errors=errors, form=request.form)
 
     return render_template('add_expense.html', categories=EXPENSE_CATEGORIES, errors={}, form={})
+
+
+@app.route('/expenses/<int:expense_id>/delete', methods=['POST'])
+@login_required
+def delete_expense_view(expense_id):
+    deleted = delete_expense(expense_id, session['user_id'])
+    if not deleted:
+        flash('Expense not found or access denied.', 'error')
+    else:
+        flash('Expense deleted.', 'success')
+    return redirect(url_for('dashboard'))
 
 
 @app.route('/logout')
