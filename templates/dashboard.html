@@ -55,7 +55,11 @@
                 <td>{{ e['description'] or '—' }}</td>
                 <td class="col-amount">{{ e['amount'] | currency }}</td>
                 <td class="col-actions">
-                    <a href="/expenses/{{ e['id'] }}/delete" class="delete-link">Delete</a>
+                    <form method="POST" action="{{ url_for('delete_expense_view', expense_id=e['id']) }}" style="margin: 0;">
+                        <button type="submit" class="delete-link"
+                                style="background: none; border: none; padding: 0; cursor: pointer; font: inherit;"
+                                onclick="return confirm('Delete this expense?')">Delete</button>
+                    </form>
                 </td>
             </tr>
             {% endfor %}
