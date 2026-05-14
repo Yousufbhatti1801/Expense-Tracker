@@ -2,22 +2,52 @@
 
 {% block title %}Sign in — Spendly{% endblock %}
 
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/login.css') }}">
+{% endblock %}
+
 {% block content %}
-<div class="container">
-    <div class="card">
-        <h1 class="card-title">Sign in</h1>
+<div class="login-page">
+    <div class="login-card">
+
+        <div class="login-logo">
+            <span class="login-logo-wordmark">Spendly</span>
+            <p class="login-logo-tagline">Track every rupee.</p>
+        </div>
+
         <form method="POST" action="{{ url_for('login') }}">
-            <div class="form-group">
-                <label class="form-label" for="email">Email</label>
-                <input class="form-input" type="email" id="email" name="email" required>
+            <div class="login-input-group">
+                <input class="login-input" type="email" name="email"
+                       placeholder="Email address" required autocomplete="email">
             </div>
-            <div class="form-group">
-                <label class="form-label" for="password">Password</label>
-                <input class="form-input" type="password" id="password" name="password" required>
+            <div class="login-input-group">
+                <div class="login-password-wrapper">
+                    <input class="login-input" type="password" id="password"
+                           name="password" placeholder="Password" required autocomplete="current-password">
+                    <button type="button" class="login-password-toggle" id="toggle-password"
+                            aria-label="Show password">&#128065;</button>
+                </div>
             </div>
-            <button class="btn btn-primary btn-block" type="submit">Sign in</button>
+            <button class="login-btn" type="submit">Sign in</button>
         </form>
-        <p class="form-footer">Don't have an account? <a href="{{ url_for('register') }}">Register</a></p>
+
+        <div class="login-divider">
+            <hr><span>OR</span><hr>
+        </div>
+
+        <p class="login-signup">
+            Don't have an account? <a href="{{ url_for('register') }}">Sign up</a>
+        </p>
+
     </div>
 </div>
+
+<script>
+    document.getElementById('toggle-password').addEventListener('click', function () {
+        var input = document.getElementById('password');
+        var isHidden = input.type === 'password';
+        input.type = isHidden ? 'text' : 'password';
+        this.setAttribute('aria-label', isHidden ? 'Hide password' : 'Show password');
+    });
+</script>
 {% endblock %}
