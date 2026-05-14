@@ -182,3 +182,20 @@ body {
 .form-footer a:hover {
     text-decoration: underline;
 }
+
+/* Inline field errors */
+.form-error {
+    display: block;
+    margin-top: 0.25rem;
+    font-size: 0.8rem;
+    color: var(--color-danger);
+}
+
+.form-input--error {
+    border-color: var(--color-danger);
+}
+
+.form-input--error:focus {
+    border-color: var(--color-danger);
+    box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.15);
+}
