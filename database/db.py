@@ -135,6 +135,28 @@ def delete_expense(expense_id, user_id):
     return cursor.rowcount > 0
 
 
+def get_expense_by_id(expense_id, user_id):
+    conn = get_db()
+    expense = conn.execute(
+        'SELECT * FROM expenses WHERE id = ? AND user_id = ?',
+        (expense_id, user_id)
+    ).fetchone()
+    conn.close()
+    return expense
+
+
+def update_expense(expense_id, user_id, amount, category, date, description):
+    conn = get_db()
+    cursor = conn.execute(
+        'UPDATE expenses SET amount = ?, category = ?, date = ?, description = ? '
+        'WHERE id = ? AND user_id = ?',
+        (amount, category, date, description, expense_id, user_id)
+    )
+    conn.commit()
+    conn.close()
+    return cursor.rowcount > 0
+
+
 def get_category_summary_by_range(user_id, range_filter):
     today = date.today()
     if range_filter == 'yesterday':
