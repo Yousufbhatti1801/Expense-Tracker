@@ -85,3 +85,27 @@ def create_user(name, email, password_hash):
     conn.commit()
     conn.close()
     return user_id
+
+
+def get_expenses_by_user(user_id):
+    conn = get_db()
+    rows = conn.execute(
+        'SELECT * FROM expenses WHERE user_id = ? ORDER BY date DESC',
+        (user_id,)
+    ).fetchall()
+    conn.close()
+    return rows
+
+
+def get_expense_summary(user_id):
+    conn = get_db()
+    total = conn.execute(
+        'SELECT COALESCE(SUM(amount), 0) AS total FROM expenses WHERE user_id = ?',
+        (user_id,)
+    ).fetchone()['total']
+    by_category = conn.execute(
+        'SELECT category, COALESCE(SUM(amount), 0) AS total FROM expenses WHERE user_id = ? GROUP BY category ORDER BY total DESC',
+        (user_id,)
+    ).fetchall()
+    conn.close()
+    return {'total': total, 'by_category': by_category}

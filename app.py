@@ -1,10 +1,15 @@
 import functools
 from flask import Flask, render_template, redirect, url_for, request, session, flash
 from werkzeug.security import generate_password_hash, check_password_hash
-from database.db import init_db, seed_db, get_user_by_email, create_user
+from database.db import init_db, seed_db, get_user_by_email, create_user, get_expenses_by_user, get_expense_summary
 
 app = Flask(__name__)
 app.secret_key = 'dev-secret-key'  # TODO: load from env var in production
+
+
+@app.template_filter('currency')
+def currency_filter(value):
+    return f'£{value:,.2f}'
 
 
 def login_required(f):
@@ -61,9 +66,18 @@ def login():
 
         session['user_id'] = user['id']
         session['user_name'] = user['name']
-        return redirect(url_for('landing'))
+        return redirect(url_for('dashboard'))
 
     return render_template('login.html')
+
+
+@app.route('/dashboard')
+@login_required
+def dashboard():
+    user_id = session['user_id']
+    expenses = get_expenses_by_user(user_id)
+    summary = get_expense_summary(user_id)
+    return render_template('dashboard.html', expenses=expenses, summary=summary)
 
 
 @app.route('/logout')
