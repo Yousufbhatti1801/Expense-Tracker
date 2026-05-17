@@ -147,6 +147,14 @@
     text-decoration: underline;
 }
 
+.login-input {
+    min-height: 44px;
+}
+
+.login-btn {
+    min-height: 44px;
+}
+
 @media (max-width: 480px) {
     .login-card {
         margin: 0;
