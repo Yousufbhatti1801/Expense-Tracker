@@ -1,3 +1,4 @@
+import os
 import functools
 from datetime import datetime
 from flask import Flask, render_template, redirect, url_for, request, session, flash, jsonify, abort
@@ -5,7 +6,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from database.db import init_db, seed_db, get_user_by_email, create_user, get_expenses_by_user, get_expense_summary, add_expense, delete_expense, get_category_summary_by_range, get_period_summary_by_range, get_expense_by_id, update_expense
 
 app = Flask(__name__)
-app.secret_key = 'dev-secret-key'  # TODO: load from env var in production
+app.secret_key = os.environ.get('SECRET_KEY', 'dev-secret-key-NOT-for-production')
 
 
 @app.template_filter('currency')
@@ -227,5 +228,6 @@ def logout():
 if __name__ == '__main__':
     with app.app_context():
         init_db()
-        seed_db()
+        if os.environ.get('FLASK_ENV') != 'production':
+            seed_db()
     app.run(debug=True, port=5001)
