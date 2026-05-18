@@ -1,58 +1,108 @@
-import sqlite3
 import os
+import sqlite3
 from datetime import date, timedelta
 from werkzeug.security import generate_password_hash
 
-DB_PATH = os.environ.get(
+# Detect if we are running on Railway (Postgres) or locally (SQLite)
+DATABASE_URL = os.environ.get('DATABASE_URL', '')
+IS_POSTGRES = DATABASE_URL.startswith('postgres')
+
+if IS_POSTGRES:
+    import psycopg2
+    from psycopg2.extras import RealDictCursor
+
+DB_PATH = DATABASE_URL if IS_POSTGRES else os.environ.get(
     'DATABASE_URL',
     os.path.join(os.path.dirname(__file__), '..', 'spendly.db')
 )
 
 
 def get_db():
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    conn.execute('PRAGMA foreign_keys = ON')
-    return conn
+    if IS_POSTGRES:
+        conn = psycopg2.connect(DATABASE_URL, cursor_factory=RealDictCursor)
+        return conn
+    else:
+        conn = sqlite3.connect(DB_PATH)
+        conn.row_factory = sqlite3.Row
+        conn.execute('PRAGMA foreign_keys = ON')
+        return conn
 
 
 def init_db():
     conn = get_db()
-    conn.executescript('''
-        CREATE TABLE IF NOT EXISTS users (
-            id            INTEGER PRIMARY KEY AUTOINCREMENT,
-            name          TEXT    NOT NULL,
-            email         TEXT    UNIQUE NOT NULL,
-            password_hash TEXT    NOT NULL,
-            created_at    TEXT    DEFAULT (datetime('now'))
-        );
+    cursor = conn.cursor()
+    
+    if IS_POSTGRES:
+        # Postgres compatible schema
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS users (
+                id            SERIAL PRIMARY KEY,
+                name          TEXT    NOT NULL,
+                email         TEXT    UNIQUE NOT NULL,
+                password_hash TEXT    NOT NULL,
+                created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+        ''')
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS expenses (
+                id          SERIAL PRIMARY KEY,
+                user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                amount      REAL    NOT NULL,
+                category    TEXT    NOT NULL,
+                date        DATE    NOT NULL,
+                description TEXT,
+                created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+        ''')
+    else:
+        # SQLite compatible schema
+        cursor.executescript('''
+            CREATE TABLE IF NOT EXISTS users (
+                id            INTEGER PRIMARY KEY AUTOINCREMENT,
+                name          TEXT    NOT NULL,
+                email         TEXT    UNIQUE NOT NULL,
+                password_hash TEXT    NOT NULL,
+                created_at    TEXT    DEFAULT (datetime('now'))
+            );
 
-        CREATE TABLE IF NOT EXISTS expenses (
-            id          INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id     INTEGER NOT NULL REFERENCES users(id),
-            amount      REAL    NOT NULL,
-            category    TEXT    NOT NULL,
-            date        TEXT    NOT NULL,
-            description TEXT,
-            created_at  TEXT    DEFAULT (datetime('now'))
-        );
-    ''')
+            CREATE TABLE IF NOT EXISTS expenses (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id     INTEGER NOT NULL REFERENCES users(id),
+                amount      REAL    NOT NULL,
+                category    TEXT    NOT NULL,
+                date        TEXT    NOT NULL,
+                description TEXT,
+                created_at  TEXT    DEFAULT (datetime('now'))
+            );
+        ''')
+        
     conn.commit()
     conn.close()
 
 
 def seed_db():
     conn = get_db()
-    count = conn.execute('SELECT COUNT(*) FROM users').fetchone()[0]
+    cursor = conn.cursor()
+    
+    cursor.execute('SELECT COUNT(*) AS c FROM users')
+    count = cursor.fetchone()['c']
+    
     if count > 0:
         conn.close()
         return
 
-    conn.execute(
-        'INSERT INTO users (name, email, password_hash) VALUES (?, ?, ?)',
-        ('Demo User', 'demo@spendly.com', generate_password_hash('demo123'))
-    )
-    user_id = conn.execute('SELECT last_insert_rowid()').fetchone()[0]
+    if IS_POSTGRES:
+        cursor.execute(
+            'INSERT INTO users (name, email, password_hash) VALUES (%s, %s, %s) RETURNING id',
+            ('Demo User', 'demo@spendly.com', generate_password_hash('demo123'))
+        )
+        user_id = cursor.fetchone()['id']
+    else:
+        cursor.execute(
+            'INSERT INTO users (name, email, password_hash) VALUES (?, ?, ?)',
+            ('Demo User', 'demo@spendly.com', generate_password_hash('demo123'))
+        )
+        user_id = cursor.lastrowid
 
     expenses = [
         (user_id, 12.50,  'Food',          '2026-05-01', 'Breakfast at cafe'),
@@ -64,28 +114,51 @@ def seed_db():
         (user_id, 18.75,  'Food',          '2026-05-13', 'Lunch with colleague'),
         (user_id, 15.00,  'Other',         '2026-05-15', 'Miscellaneous'),
     ]
-    conn.executemany(
-        'INSERT INTO expenses (user_id, amount, category, date, description) VALUES (?, ?, ?, ?, ?)',
-        expenses
-    )
+    
+    if IS_POSTGRES:
+        cursor.executemany(
+            'INSERT INTO expenses (user_id, amount, category, date, description) VALUES (%s, %s, %s, %s, %s)',
+            expenses
+        )
+    else:
+        cursor.executemany(
+            'INSERT INTO expenses (user_id, amount, category, date, description) VALUES (?, ?, ?, ?, ?)',
+            expenses
+        )
+        
     conn.commit()
     conn.close()
 
 
 def get_user_by_email(email):
     conn = get_db()
-    user = conn.execute('SELECT * FROM users WHERE email = ?', (email,)).fetchone()
+    cursor = conn.cursor()
+    query = 'SELECT * FROM users WHERE email = ?'
+    if IS_POSTGRES: query = query.replace('?', '%s')
+    
+    cursor.execute(query, (email,))
+    user = cursor.fetchone()
     conn.close()
     return user
 
 
 def create_user(name, email, password_hash):
     conn = get_db()
-    cursor = conn.execute(
-        'INSERT INTO users (name, email, password_hash) VALUES (?, ?, ?)',
-        (name, email, password_hash)
-    )
-    user_id = cursor.lastrowid
+    cursor = conn.cursor()
+    
+    if IS_POSTGRES:
+        cursor.execute(
+            'INSERT INTO users (name, email, password_hash) VALUES (%s, %s, %s) RETURNING id',
+            (name, email, password_hash)
+        )
+        user_id = cursor.fetchone()['id']
+    else:
+        cursor.execute(
+            'INSERT INTO users (name, email, password_hash) VALUES (?, ?, ?)',
+            (name, email, password_hash)
+        )
+        user_id = cursor.lastrowid
+        
     conn.commit()
     conn.close()
     return user_id
@@ -93,24 +166,30 @@ def create_user(name, email, password_hash):
 
 def get_expenses_by_user(user_id):
     conn = get_db()
-    rows = conn.execute(
-        'SELECT * FROM expenses WHERE user_id = ? ORDER BY date DESC',
-        (user_id,)
-    ).fetchall()
+    cursor = conn.cursor()
+    query = 'SELECT * FROM expenses WHERE user_id = ? ORDER BY date DESC'
+    if IS_POSTGRES: query = query.replace('?', '%s')
+    
+    cursor.execute(query, (user_id,))
+    rows = cursor.fetchall()
     conn.close()
     return rows
 
 
 def get_expense_summary(user_id):
     conn = get_db()
-    total = conn.execute(
-        'SELECT COALESCE(SUM(amount), 0) AS total FROM expenses WHERE user_id = ?',
-        (user_id,)
-    ).fetchone()['total']
-    by_category = conn.execute(
-        'SELECT category, COALESCE(SUM(amount), 0) AS total, COUNT(*) AS count FROM expenses WHERE user_id = ? GROUP BY category ORDER BY total DESC',
-        (user_id,)
-    ).fetchall()
+    cursor = conn.cursor()
+    
+    query_total = 'SELECT COALESCE(SUM(amount), 0) AS total FROM expenses WHERE user_id = ?'
+    if IS_POSTGRES: query_total = query_total.replace('?', '%s')
+    cursor.execute(query_total, (user_id,))
+    total = cursor.fetchone()['total']
+    
+    query_cat = 'SELECT category, COALESCE(SUM(amount), 0) AS total, COUNT(*) AS count FROM expenses WHERE user_id = ? GROUP BY category ORDER BY total DESC'
+    if IS_POSTGRES: query_cat = query_cat.replace('?', '%s')
+    cursor.execute(query_cat, (user_id,))
+    by_category = cursor.fetchall()
+    
     conn.close()
     return {
         'total': total,
@@ -120,60 +199,69 @@ def get_expense_summary(user_id):
 
 def add_expense(user_id, amount, category, date, description):
     conn = get_db()
-    cursor = conn.execute(
-        'INSERT INTO expenses (user_id, amount, category, date, description) VALUES (?, ?, ?, ?, ?)',
-        (user_id, amount, category, date, description)
-    )
+    cursor = conn.cursor()
+    
+    if IS_POSTGRES:
+        cursor.execute(
+            'INSERT INTO expenses (user_id, amount, category, date, description) VALUES (%s, %s, %s, %s, %s) RETURNING id',
+            (user_id, amount, category, date, description)
+        )
+        new_id = cursor.fetchone()['id']
+    else:
+        cursor.execute(
+            'INSERT INTO expenses (user_id, amount, category, date, description) VALUES (?, ?, ?, ?, ?)',
+            (user_id, amount, category, date, description)
+        )
+        new_id = cursor.lastrowid
+        
     conn.commit()
-    new_id = cursor.lastrowid
     conn.close()
     return new_id
 
 
 def delete_expense(expense_id, user_id):
     conn = get_db()
-    cursor = conn.execute(
-        'DELETE FROM expenses WHERE id = ? AND user_id = ?',
-        (expense_id, user_id)
-    )
+    cursor = conn.cursor()
+    query = 'DELETE FROM expenses WHERE id = ? AND user_id = ?'
+    if IS_POSTGRES: query = query.replace('?', '%s')
+    
+    cursor.execute(query, (expense_id, user_id))
+    success = cursor.rowcount > 0
     conn.commit()
     conn.close()
-    return cursor.rowcount > 0
+    return success
 
 
 def get_expense_by_id(expense_id, user_id):
     conn = get_db()
-    expense = conn.execute(
-        'SELECT * FROM expenses WHERE id = ? AND user_id = ?',
-        (expense_id, user_id)
-    ).fetchone()
+    cursor = conn.cursor()
+    query = 'SELECT * FROM expenses WHERE id = ? AND user_id = ?'
+    if IS_POSTGRES: query = query.replace('?', '%s')
+    
+    cursor.execute(query, (expense_id, user_id))
+    expense = cursor.fetchone()
     conn.close()
     return expense
 
 
 def update_expense(expense_id, user_id, amount, category, date, description):
     conn = get_db()
-    cursor = conn.execute(
-        'UPDATE expenses SET amount = ?, category = ?, date = ?, description = ? '
-        'WHERE id = ? AND user_id = ?',
-        (amount, category, date, description, expense_id, user_id)
-    )
+    cursor = conn.cursor()
+    query = 'UPDATE expenses SET amount = ?, category = ?, date = ?, description = ? WHERE id = ? AND user_id = ?'
+    if IS_POSTGRES: query = query.replace('?', '%s')
+    
+    cursor.execute(query, (amount, category, date, description, expense_id, user_id))
+    success = cursor.rowcount > 0
     conn.commit()
     conn.close()
-    return cursor.rowcount > 0
+    return success
 
 
 def get_category_summary_by_range(user_id, range_filter):
     today = date.today()
     if range_filter == 'yesterday':
         start = (today - timedelta(days=1)).isoformat()
-        conn = get_db()
-        rows = conn.execute(
-            'SELECT category, COALESCE(SUM(amount), 0) AS total '
-            'FROM expenses WHERE user_id = ? AND date = ? '
-            'GROUP BY category ORDER BY total DESC',
-            (user_id, start)
-        ).fetchall()
+        query = 'SELECT category, COALESCE(SUM(amount), 0) AS total FROM expenses WHERE user_id = ? AND date = ? GROUP BY category ORDER BY total DESC'
     else:
         if range_filter == 'weekly':
             start = (today - timedelta(days=6)).isoformat()
@@ -186,33 +274,37 @@ def get_category_summary_by_range(user_id, range_filter):
                 month += 12
                 year -= 1
             start = date(year, month, 1).isoformat()
-        conn = get_db()
-        rows = conn.execute(
-            'SELECT category, COALESCE(SUM(amount), 0) AS total '
-            'FROM expenses WHERE user_id = ? AND date >= ? '
-            'GROUP BY category ORDER BY total DESC',
-            (user_id, start)
-        ).fetchall()
+        query = 'SELECT category, COALESCE(SUM(amount), 0) AS total FROM expenses WHERE user_id = ? AND date >= ? GROUP BY category ORDER BY total DESC'
+    
+    if IS_POSTGRES: query = query.replace('?', '%s')
+        
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute(query, (user_id, start))
+    rows = cursor.fetchall()
     conn.close()
+    
     return [{'category': r['category'], 'total': r['total']} for r in rows]
 
 
 def get_period_summary_by_range(user_id, range_filter):
     today = date.today()
 
+    if range_filter in ['yesterday', 'weekly', '1month']:
+        group_expr = "TO_CHAR(date::DATE, 'YYYY-MM-DD')" if IS_POSTGRES else "strftime('%Y-%m-%d', date)"
+    else:
+        group_expr = "TO_CHAR(date::DATE, 'YYYY-MM')" if IS_POSTGRES else "strftime('%Y-%m', date)"
+
     if range_filter == 'yesterday':
         labels = [(today - timedelta(days=1)).isoformat()]
-        group_expr = "strftime('%Y-%m-%d', date)"
         param = (today - timedelta(days=1)).isoformat()
         date_clause = 'date = ?'
     elif range_filter == 'weekly':
         labels = [(today - timedelta(days=i)).isoformat() for i in range(6, -1, -1)]
-        group_expr = "strftime('%Y-%m-%d', date)"
         param = (today - timedelta(days=6)).isoformat()
         date_clause = 'date >= ?'
     elif range_filter == '1month':
         labels = [(today - timedelta(days=i)).isoformat() for i in range(29, -1, -1)]
-        group_expr = "strftime('%Y-%m-%d', date)"
         param = (today - timedelta(days=29)).isoformat()
         date_clause = 'date >= ?'
     else:  # 6months
@@ -225,17 +317,16 @@ def get_period_summary_by_range(user_id, range_filter):
                 m = 12
                 y -= 1
         labels = list(reversed(month_labels))
-        group_expr = "strftime('%Y-%m', date)"
         param = date(int(labels[0][:4]), int(labels[0][5:7]), 1).isoformat()
         date_clause = 'date >= ?'
 
+    query = f'SELECT {group_expr} AS label, COALESCE(SUM(amount), 0) AS total FROM expenses WHERE user_id = ? AND {date_clause} GROUP BY label ORDER BY label ASC'
+    if IS_POSTGRES: query = query.replace('?', '%s')
+
     conn = get_db()
-    rows = conn.execute(
-        f'SELECT {group_expr} AS label, COALESCE(SUM(amount), 0) AS total '
-        f'FROM expenses WHERE user_id = ? AND {date_clause} '
-        f'GROUP BY label ORDER BY label ASC',
-        (user_id, param)
-    ).fetchall()
+    cursor = conn.cursor()
+    cursor.execute(query, (user_id, param))
+    rows = cursor.fetchall()
     conn.close()
 
     db_map = {r['label']: r['total'] for r in rows}
