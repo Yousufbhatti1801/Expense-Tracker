@@ -67,7 +67,13 @@
         </div>
         <div class="stat-chip">
             <span class="stat-chip__label">Most-Used Category</span>
-            <span class="stat-chip__value">{% if summary.by_category %}{{ summary.by_category[0]['category'] }}{% else %}—{% endif %}</span>
+            {% if summary.by_category %}
+                {% set ns = namespace(most_used=summary.by_category[0]) %}
+                {% for cat in summary.by_category %}{% if cat['count'] > ns.most_used['count'] %}{% set ns.most_used = cat %}{% endif %}{% endfor %}
+                <span class="stat-chip__value">{{ ns.most_used['category'] }}</span>
+            {% else %}
+                <span class="stat-chip__value">—</span>
+            {% endif %}
         </div>
         <div class="stat-chip">
             <span class="stat-chip__label">This Month</span>

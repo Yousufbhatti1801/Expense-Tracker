@@ -108,11 +108,14 @@ def get_expense_summary(user_id):
         (user_id,)
     ).fetchone()['total']
     by_category = conn.execute(
-        'SELECT category, COALESCE(SUM(amount), 0) AS total FROM expenses WHERE user_id = ? GROUP BY category ORDER BY total DESC',
+        'SELECT category, COALESCE(SUM(amount), 0) AS total, COUNT(*) AS count FROM expenses WHERE user_id = ? GROUP BY category ORDER BY total DESC',
         (user_id,)
     ).fetchall()
     conn.close()
-    return {'total': total, 'by_category': by_category}
+    return {
+        'total': total,
+        'by_category': [{'category': r['category'], 'total': r['total'], 'count': r['count']} for r in by_category],
+    }
 
 
 def add_expense(user_id, amount, category, date, description):
