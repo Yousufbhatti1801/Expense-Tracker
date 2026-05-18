@@ -4,9 +4,10 @@ from datetime import date, timedelta
 from werkzeug.security import generate_password_hash
 
 DB_PATH = os.environ.get(
-    'DATABASE_URL',
+    'SQLITE_DB_PATH',
     os.path.join(os.path.dirname(__file__), '..', 'spendly.db')
 )
+os.makedirs(os.path.dirname(os.path.abspath(DB_PATH)), exist_ok=True)
 
 
 def get_db():
